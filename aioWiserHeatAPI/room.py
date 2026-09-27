@@ -10,6 +10,7 @@ from .const import (
     TEMP_OFF,
     TEXT_BOOST,
     TEXT_MANUAL,
+    TEXT_MODULATING,
     TEXT_OFF,
     TEXT_ON,
     TEXT_UNKNOWN,
@@ -365,11 +366,15 @@ class _WiserRoom(object):
 
     @property
     def is_heating(self) -> bool:
-        """Get if the room is currently heating"""
-        return (
-            True
-            if self._data.get("ControlOutputState", TEXT_OFF) == TEXT_ON
-            else False
+        """Get if the room is currently heating.
+
+        Hub V1/on-off systems report this through ControlOutputState. Hub V2
+        OpenTherm systems leave that field off and report modulating room demand
+        through PercentageDemand instead.
+        """
+        return self._data.get("ControlOutputState", TEXT_OFF) == TEXT_ON or (
+            self.demand_type == TEXT_MODULATING
+            and self.percentage_demand > 0
         )
 
     @property
