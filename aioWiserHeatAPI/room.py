@@ -10,7 +10,6 @@ from .const import (
     TEMP_OFF,
     TEXT_BOOST,
     TEXT_MANUAL,
-    TEXT_MODULATING,
     TEXT_OFF,
     TEXT_ON,
     TEXT_UNKNOWN,
@@ -36,12 +35,14 @@ class _WiserRoom(object):
         schedule: _WiserSchedule,
         devices: list,
         enable_automations: bool,
+        opentherm=None,
     ):
         self._wiser_rest_controller = wiser_rest_controller
         self._data = room
         self._schedule = schedule
         self._devices = devices
         self._enable_automations = enable_automations
+        self._opentherm = opentherm
         self._extra_config = (
             self._wiser_rest_controller._extra_config.config(
                 "Rooms", str(self.id)
@@ -365,17 +366,21 @@ class _WiserRoom(object):
         )
 
     @property
-    def is_heating(self) -> bool:
-        """Get if the room is currently heating.
+    def is_calling_for_heat(self) -> bool | None:
+        """Return whether the room is requesting heat."""
+        if "PercentageDemand" not in self._data:
+            return None
+        return self.percentage_demand > 0
 
-        Hub V1/on-off systems report this through ControlOutputState. Hub V2
-        OpenTherm systems leave that field off and report modulating room demand
-        through PercentageDemand instead.
-        """
-        return self._data.get("ControlOutputState", TEXT_OFF) == TEXT_ON or (
-            self.demand_type == TEXT_MODULATING
-            and self.percentage_demand > 0
-        )
+    @property
+    def is_heating(self) -> bool:
+        """Return whether central heating is currently servicing room demand."""
+        if self._opentherm and self._opentherm.connection_status == "Connected":
+            return (
+                self.is_calling_for_heat
+                and self._opentherm.central_heating_active
+            )
+        return self._data.get("ControlOutputState", TEXT_OFF) == TEXT_ON
 
     @property
     def manual_target_temperature(self) -> float:
@@ -746,6 +751,7 @@ class _WiserRoomCollection:
         schedules: _WiserScheduleCollection,
         devices: _WiserDeviceCollection,
         enable_automations: bool,
+        opentherm=None,
     ):
         super().__init__()
         self._wiser_rest_controller = wiser_rest_controller
@@ -753,6 +759,7 @@ class _WiserRoomCollection:
         self._schedules = schedules
         self._devices = devices
         self._enable_automations = enable_automations
+        self._opentherm = opentherm
         self._rooms: list(_WiserRoom) = []
         self._build()
 
@@ -772,6 +779,7 @@ class _WiserRoomCollection:
                     schedule[0] if len(schedule) > 0 else None,
                     devices,
                     self._enable_automations,
+                    self._opentherm,
                 )
             )
 
