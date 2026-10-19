@@ -163,10 +163,11 @@ class _WiserRoom(object):
                 scheduled_lower = provider(self)
                 if scheduled_lower is not None:
                     return min(float(scheduled_lower), self.passive_mode_upper_temp)
-            except (TypeError, ValueError):
+            except Exception:
                 _LOGGER.warning(
                     "Ignoring invalid scheduled Passive Mode lower temperature for %s",
                     self.name,
+                    exc_info=True,
                 )
         if self._extra_config and "min" in self._extra_config:
             return min(self._extra_config["min"], self.passive_mode_upper_temp)
@@ -189,10 +190,11 @@ class _WiserRoom(object):
                     override_upper = provider(self)
                     if override_upper is not None:
                         return float(override_upper)
-                except (TypeError, ValueError):
+                except Exception:
                     _LOGGER.warning(
                         "Ignoring invalid Passive Mode upper temperature override for %s",
                         self.name,
+                        exc_info=True,
                     )
             return self.schedule.current_setting
         else:
@@ -237,12 +239,20 @@ class _WiserRoom(object):
         provider = (
             self._wiser_rest_controller._api_parameters.passive_mode_temperature_limiter_provider
         )
-        return bool(
+        if (
             self.mode == WiserHeatingModeEnum.auto.value
             and self.schedule is not None
             and provider is not None
-            and provider(self)
-        )
+        ):
+            try:
+                return bool(provider(self))
+            except Exception:
+                _LOGGER.warning(
+                    "Ignoring invalid Passive Mode temperature limiter for %s",
+                    self.name,
+                    exc_info=True,
+                )
+        return False
 
     async def set_passive_mode_lower_temp(self, temp):
         if not await self._update_extra_config("min", temp):
@@ -431,7 +441,7 @@ class _WiserRoom(object):
         """Return whether central heating is currently servicing room demand."""
         if self._opentherm and self._opentherm.connection_status == "Connected":
             return (
-                self.is_calling_for_heat
+                self.is_calling_for_heat is True
                 and self._opentherm.central_heating_active
             )
         return self._data.get("ControlOutputState", TEXT_OFF) == TEXT_ON
