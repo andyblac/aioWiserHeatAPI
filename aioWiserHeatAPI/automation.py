@@ -1,8 +1,8 @@
 import inspect
 
 from . import _LOGGER
-from .const import TEXT_UNKNOWN, WISERSYSTEM
-from .rest_controller import _WiserRestController
+from .const import TEXT_UNKNOWN, WISERAUTOMATION, WISERSYSTEM
+from .rest_controller import WiserRestActionEnum, _WiserRestController
 
 
 class _WiserAutomation:
@@ -49,6 +49,24 @@ class _WiserAutomation:
     async def enable_notification(self):
         """Activate automation"""
         return await self._send_command({"EnableNotification": self.id})
+
+    async def set_enabled(self, enabled: bool) -> bool:
+        """Enable or disable this automation."""
+        await self._wiser_rest_controller._send_command(
+            f"{WISERAUTOMATION.format(self.id)}/Enabled",
+            enabled,
+        )
+        self._automation_data["Enabled"] = enabled
+        return True
+
+    async def delete(self) -> bool:
+        """Delete this automation from the hub."""
+        await self._wiser_rest_controller._send_command(
+            WISERAUTOMATION.format(self.id),
+            None,
+            WiserRestActionEnum.DELETE,
+        )
+        return True
 
 
 class _WiserAutomationCollection(object):
